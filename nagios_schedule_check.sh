@@ -90,6 +90,10 @@ CONFIG FILE:
     -u https://nagios.prod.internal/nagios4
     -c /var/spool/nagios/nagios.cmd
 
+DEPENDENCIES:
+
+  The 'jq' utility must be installed, see https://stedolan.github.io/jq/
+
 EXAMPLES:
 
   Schedule service checks for all services in the 'ssl-cert' service group on
