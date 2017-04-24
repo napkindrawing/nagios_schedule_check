@@ -24,6 +24,8 @@ One or more of the following is required to perform a search for relevant
 services:
 
 ```
+  -a STATUS .......... Specify service checks by their status. Accepted values
+                       are: 'ok', 'warning', 'critical', 'unknown', 'pending'
   -s SERVICE_DESCR ... Specify service checks by service description
   -S SERVICE_GROUP ... Specify service checks by service group name
   -o HOST ............ Specify service checks on a specific host
@@ -78,6 +80,11 @@ Schedule service checks for the service 'Processes - Burninator' on all hosts:
 
 	nagios_schedule_check.sh -s 'Processes - Burninator'
 
+Schedule service checks for all services in 'warning' state in the host group
+'web-servers':
+
+    nagios_schedule_check.sh -a warning -O web-servers
+ 
 Schedule service checks for the all services in the service group
 'dns-resolution' on hosts in the host group 'web-servers', spreading them out over
 the next 5 minutes (300 seconds):

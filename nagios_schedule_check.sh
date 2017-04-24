@@ -56,6 +56,8 @@ REQUIRED PARAMETERS:
   One or more of the following is required to perform a search for relevant
   services:
 
+  -a STATUS .......... Specify service checks by their status. Accepted values
+                       are: 'ok', 'warning', 'critical', 'unknown', 'pending'
   -s SERVICE_DESCR ... Specify service checks by service description
   -S SERVICE_GROUP ... Specify service checks by service group name
   -o HOST ............ Specify service checks on a specific host
@@ -105,6 +107,11 @@ EXAMPLES:
   Schedule service checks for the service 'Processes: Collectd' on all hosts:
 
     nagios_schedule_check.sh -s 'Processes: Nginx'
+
+  Schedule service checks for all services in 'warning' state in the host
+  group 'web-servers':
+
+    nagios_schedule_check.sh -a warning -O web-servers
  
   Schedule service checks for the all services in the service group
   'dns-resolution' on hosts in the group 'web-servers', spreading them out over
@@ -143,12 +150,27 @@ QUERY_SERVICE=""
 QUERY_SERVICE_GROUP=""
 QUERY_HOST=""
 QUERY_HOST_GROUP=""
+QUERY_STATUS=""
 
 config_from_flag() {
     FLAG="$1"
     OPTARG="${2:-}"
     case "${FLAG#-}" in
         h)  usage ;;
+        a)  
+            case "$OPTARG" in
+                ok|warning|critical|unknown|pending)
+                    if [ -n "$QUERY_STATUS" ]; then
+                        QUERY_STATUS="${QUERY_STATUS}+"
+                    fi
+                    QUERY_STATUS="${QUERY_STATUS}${OPTARG}"
+                    ;;
+                *)
+                    printf "ERROR: Allowed values for -a are: ok, warning, critical, unknown, pending\n" >&2
+                    exit 2
+                    ;;
+            esac
+            ;;
         c)  CMD_FILE="$OPTARG" ;;
         d)  DEBUG="1" ;;
         l)  LIMIT="$OPTARG" ;;
@@ -177,7 +199,7 @@ if [ -f ~/.nagios_schedule_check.conf ]; then
     IFS="$ORIG_IFS"
 fi
 
-while getopts c:do:O:hkl:nps:S:t:u: FLAG; do
+while getopts a:c:do:O:hkl:nps:S:t:u: FLAG; do
     config_from_flag "$FLAG" "${OPTARG:-}"
 done
 
@@ -197,11 +219,15 @@ if [ -z "$PRINT" ]; then
     fi
 fi
 
+printf_debug "Status: %s" "$QUERY_STATUS"
 printf_debug "Service Group: %s" "$QUERY_SERVICE_GROUP"
 printf_debug "Service: %s" "$QUERY_SERVICE"
 printf_debug "Host Group: %s" "$QUERY_HOST_GROUP"
 printf_debug "Host: %s" "$QUERY_HOST"
 
+if [ -n "$QUERY_STATUS" ]; then
+    SEARCH_URI="${SEARCH_URI}&servicestatus=${QUERY_STATUS}"
+fi
 if [ -n "$QUERY_SERVICE_GROUP" ]; then
     SEARCH_URI="${SEARCH_URI}&servicegroup=${QUERY_SERVICE_GROUP}"
 fi
