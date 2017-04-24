@@ -6,7 +6,7 @@
 
 Query nagios for services and schedule forced service checks for the results.
 
-This script must be able to access the `/cgi-bin/objectjson.cgi` script of your
+This script must be able to access the `/cgi-bin/statusjson.cgi` script of your
 nagios installation through your web server.
 
 By default, this script schedules the services it can find via the

@@ -8,7 +8,7 @@ DEFAULT_CMD_FILE="/usr/local/nagios/var/rw/nagios.cmd"
 DEFAULT_LIMIT="50"
 DEFAULT_SPREAD="60"
 
-SEARCH_URI="/cgi-bin/objectjson.cgi?query=servicelist"
+SEARCH_URI="/cgi-bin/statusjson.cgi?query=servicelist"
 
 if ! which jq >/dev/null 2>&1; then
     printf "ERROR: The 'jq' command is required but missing\n" >&2
@@ -39,7 +39,7 @@ SYNOPSIS:
 
   Query nagios for services and schedule forced service checks for the results.
   
-  This script must be able to access the /cgi-bin/objectjson.cgi script of your
+  This script must be able to access the /cgi-bin/statusjson.cgi script of your
   nagios installation through your web server.
   
   By default, this script schedules the services it can find via the
@@ -254,8 +254,8 @@ fi
 
 RESULT_HOST_COUNT="$(cat "${RESULTS_JSON}" | jq -r '.data.servicelist|keys|length')"
 LONGEST_HOST_NAME="$(cat "${RESULTS_JSON}" | jq -r '.data.servicelist|keys|map(length)|max')"
-RESULT_SERVICE_COUNT="$(cat "${RESULTS_JSON}" | jq -r '.data.servicelist|flatten|length')"
-LONGEST_SERVICE_NAME="$(cat "${RESULTS_JSON}" | jq -r '.data.servicelist|flatten|map(length)|max')"
+RESULT_SERVICE_COUNT="$(cat "${RESULTS_JSON}" | jq -r '.data.servicelist|map(.|keys)|flatten|length')"
+LONGEST_SERVICE_NAME="$(cat "${RESULTS_JSON}" | jq -r '.data.servicelist|map(.|keys)|flatten|map(length)|max')"
 
 printf "Found %d services across %d hosts\n" "$RESULT_SERVICE_COUNT" "$RESULT_HOST_COUNT" >&2
 
@@ -273,7 +273,7 @@ if [ "$RESULT_HOST_COUNT" -gt 0 ]; then
 "
     cat "${RESULTS_JSON}" | jq -r '.data.servicelist|keys|.[]' | while read HOST ; do 
         printf_debug "Host: %s" "$HOST"
-        cat "${RESULTS_JSON}" | jq -r ".data.servicelist[\"${HOST}\"]|.[]" | while read SERVICE ; do 
+        cat "${RESULTS_JSON}" | jq -r ".data.servicelist[\"${HOST}\"]|keys|.[]" | while read SERVICE ; do 
             NOW="$(date +%s)"
             RAND_DUR="$(jot -r 1 1 "$SPREAD")"
             TS="$(( NOW + RAND_DUR ))"
