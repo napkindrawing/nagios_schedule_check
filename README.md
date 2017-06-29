@@ -54,6 +54,8 @@ services:
                        http://localhost/nagios
   -p ................. Print the generated commands to send to the nagios
                        command file instead of writing directly to it
+  -U username ........ Username to use to access nagios via Basic auth
+  -P password ........ Password to use to access nagios via Basic auth
 ```
 
 ## CONFIG FILE:

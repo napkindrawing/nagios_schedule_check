@@ -83,6 +83,8 @@ OPTIONAL PARAMETERS:
                        $NAGIOS_URL
   -p ................. Print the generated commands to send to the nagios
                        command file instead of writing directly to it
+  -U username ........ Username to use to access nagios via Basic auth
+  -P password ........ Password to use to access nagios via Basic auth
 
 CONFIG FILE:
 
@@ -143,6 +145,8 @@ LIMIT="$DEFAULT_LIMIT"
 NAGIOS_URL="$DEFAULT_NAGIOS_URL"
 CMD_FILE="$DEFAULT_CMD_FILE"
 SPREAD="$DEFAULT_SPREAD"
+AUTH_USER=""
+AUTH_PASS=""
 KEEP=""
 PRINT=""
 
@@ -181,8 +185,10 @@ config_from_flag() {
         o)  QUERY_HOST="$OPTARG" ;;
         O)  QUERY_HOST_GROUP="$OPTARG" ;;
         p)  PRINT="1" ;;
+        P)  AUTH_PASS="$OPTARG" ;;
         t)  SPREAD="$OPTARG" ;;
         u)  NAGIOS_URL="$OPTARG" ;;
+        U)  AUTH_USER="$OPTARG" ;;
         \?) usage "" 1 ;;
     esac
 }
@@ -199,7 +205,7 @@ if [ -f ~/.nagios_schedule_check.conf ]; then
     IFS="$ORIG_IFS"
 fi
 
-while getopts a:c:do:O:hkl:nps:S:t:u: FLAG; do
+while getopts a:c:do:O:hkl:npP:s:S:t:u:U: FLAG; do
     config_from_flag "$FLAG" "${OPTARG:-}"
 done
 
@@ -249,7 +255,11 @@ printf_debug "Full URL: %s" "$FULL_URL"
 
 set +o errexit
 
-curl -s -o "${RESULTS_JSON}" "$FULL_URL"
+if [ \( -n "$AUTH_USER" \) -a \( -n "$AUTH_PASS" \) ]; then
+    curl --user "$AUTH_USER:$AUTH_PASS" -s -o "${RESULTS_JSON}" "$FULL_URL"
+else
+    curl -s -o "${RESULTS_JSON}" "$FULL_URL"
+fi
 
 CURL_EXIT=$?
 
