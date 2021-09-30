@@ -7,6 +7,7 @@ DEFAULT_NAGIOS_URL="http://localhost/nagios"
 DEFAULT_CMD_FILE="/usr/local/nagios/var/rw/nagios.cmd"
 DEFAULT_LIMIT="50"
 DEFAULT_SPREAD="60"
+DEFAULT_ACTION="schedule-service-check"
 
 SEARCH_URI="/cgi-bin/statusjson.cgi?query=servicelist"
 
@@ -65,6 +66,10 @@ REQUIRED PARAMETERS:
 
 OPTIONAL PARAMETERS:
 
+  -A ................. The action to perform. Must be one of:
+                          - schedule-service-check (default)
+                          - acknowledge-service-problem
+  -C ................. A relevant comment to submit to nagios
   -d ................. Enable debugging output
   -h ................. Display usage information
   -l LIMIT ........... Specify the maximum number of services to schedule.
@@ -145,6 +150,8 @@ LIMIT="$DEFAULT_LIMIT"
 NAGIOS_URL="$DEFAULT_NAGIOS_URL"
 CMD_FILE="$DEFAULT_CMD_FILE"
 SPREAD="$DEFAULT_SPREAD"
+ACTION="$DEFAULT_ACTION"
+COMMENT=""
 AUTH_USER=""
 AUTH_PASS=""
 KEEP=""
@@ -161,6 +168,17 @@ config_from_flag() {
     OPTARG="${2:-}"
     case "${FLAG#-}" in
         h)  usage ;;
+        A)
+            case "$OPTARG" in
+                schedule-service-check|acknowledge-service-problem)
+                    ACTION="${OPTARG}"
+                    ;;
+                *)
+                    printf "ERROR: Allowed values for -A are: schedule-service-check, acknowledge-service-problem\n" >&2
+                    exit 2
+                    ;;
+            esac
+            ;;
         a)  
             case "$OPTARG" in
                 ok|warning|critical|unknown|pending)
@@ -176,6 +194,7 @@ config_from_flag() {
             esac
             ;;
         c)  CMD_FILE="$OPTARG" ;;
+        C)  COMMENT="$OPTARG" ;;
         d)  DEBUG="1" ;;
         l)  LIMIT="$OPTARG" ;;
         k)  KEEP="1" ;;
@@ -205,7 +224,7 @@ if [ -f ~/.nagios_schedule_check.conf ]; then
     IFS="$ORIG_IFS"
 fi
 
-while getopts a:c:do:O:hkl:npP:s:S:t:u:U: FLAG; do
+while getopts A:a:c:C:do:O:hkl:npP:s:S:t:u:U: FLAG; do
     config_from_flag "$FLAG" "${OPTARG:-}"
 done
 
@@ -225,6 +244,7 @@ if [ -z "$PRINT" ]; then
     fi
 fi
 
+printf_debug "Action: %s" "$ACTION"
 printf_debug "Status: %s" "$QUERY_STATUS"
 printf_debug "Service Group: %s" "$QUERY_SERVICE_GROUP"
 printf_debug "Service: %s" "$QUERY_SERVICE"
@@ -303,21 +323,48 @@ fi
 if [ "$RESULT_HOST_COUNT" -gt 0 ]; then
     printf_debug "Running through results ..."
 
-    printf "%-$(( LONGEST_HOST_NAME + 4 ))s%-$(( LONGEST_SERVICE_NAME + 4 ))s%s\n" "Host" "Service" "Scheduled Time" >&2
+    case "$ACTION" in
+        schedule-service-check)
+            printf "%-$(( LONGEST_HOST_NAME + 4 ))s%-$(( LONGEST_SERVICE_NAME + 4 ))s%s\n" "Host" "Service" "Scheduled Time" >&2
+            ;;
+        acknowledge-service-problem)
+            printf "%-$(( LONGEST_HOST_NAME + 4 ))s%-$(( LONGEST_SERVICE_NAME + 4 ))s\n" "Host" "Service" >&2
+            ;;
+        *)
+            printf "ERROR: Unrecognized Action '%s'\n" "$ACTION" >&2
+            exit 2
+    esac
 
     IFS="
 "
     cat "${RESULTS_JSON}" | jq -r '.data.servicelist|keys|.[]' | while read HOST ; do 
         printf_debug "Host: %s" "$HOST"
         cat "${RESULTS_JSON}" | jq -r ".data.servicelist[\"${HOST}\"]|keys|.[]" | while read SERVICE ; do 
+
             NOW="$(date +%s)"
             RAND_DUR="$(jot -r 1 1 "$SPREAD")"
             TS="$(( NOW + RAND_DUR ))"
-            CMD="$(printf "[%d] SCHEDULE_FORCED_SVC_CHECK;%s;%s;%s\n" "$NOW" "$HOST" "$SERVICE" "$TS")"
             printf_debug "    Service: %s" "$SERVICE"
-            printf_debug "    Now / Dur / TS: %s / %s / %s" "$NOW" "$RAND_DUR" "$TS"
+
+            case "$ACTION" in
+                schedule-service-check)
+                    CMD="$(printf "[%d] SCHEDULE_FORCED_SVC_CHECK;%s;%s;%s\n" "$NOW" "$HOST" "$SERVICE" "$TS")"
+                    printf_debug "    Now / Dur / TS: %s / %s / %s" "$NOW" "$RAND_DUR" "$TS"
+                    printf "%-$(( LONGEST_HOST_NAME + 4 ))s%-$(( LONGEST_SERVICE_NAME + 4 ))s%7s\n" "$HOST" "$SERVICE" "+${RAND_DUR}s" >&2
+                    ;;
+                acknowledge-service-problem)
+                    # From: https://assets.nagios.com/downloads/nagioscore/docs/externalcmds/cmdinfo.php?command_id=40
+                    # ACKNOWLEDGE_SVC_PROBLEM;<host_name>;<service_description>;<sticky>;<notify>;<persistent>;<author>;<comment>
+                    CMD="$(printf "[%d] ACKNOWLEDGE_SVC_PROBLEM;%s;%s;2;0;1;%s;%s\n" "$NOW" "$HOST" "$SERVICE" "$(whoami)" "$COMMENT")"
+                    printf "%-$(( LONGEST_HOST_NAME + 4 ))s%-$(( LONGEST_SERVICE_NAME + 4 ))s\n" "$HOST" "$SERVICE" >&2
+                    ;;
+                *)
+                    printf "ERROR: Unrecognized Action '%s'\n" "$ACTION" >&2
+                    exit 2
+            esac
+
             printf_debug "    Command: %s" "$CMD"
-            printf "%-$(( LONGEST_HOST_NAME + 4 ))s%-$(( LONGEST_SERVICE_NAME + 4 ))s%7s\n" "$HOST" "$SERVICE" "+${RAND_DUR}s" >&2
+
             if [ -n "$PRINT" ]; then
                 printf "%s\n" "$CMD"
             else
